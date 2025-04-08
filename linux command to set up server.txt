@@ -1,0 +1,7 @@
+
+
+sudo mysql -u frothbeast -p
+
+
+
+use frothbeast
