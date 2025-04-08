@@ -1,7 +1,12 @@
+npm init
+npm i --save body-parser
+npm i --save dotenv
+npm i --save express
+npm i --save mysql2
+npm i --save pug
+npm i --save nodemon
 
+sudo mysql -u root -p
 
-sudo mysql -u frothbeast -p
-
-
-
-use frothbeast
+	CREATE DATABASE IF NOT EXISTS frothbeast;
+	use frothbeast;
