@@ -1,0 +1,5 @@
+pip install node
+npm install -g npm
+npx create-react-app frothbeastserver
+cd frothbeastserver
+npm start
