@@ -38,5 +38,17 @@ node --version
 sudo npm -g install create-react-app
 create-react-app --version
 
+////// configure git //////////
+mkdir myserver
+
+git config --global user.name "frothbeast"
+git config --global user.email "frothbeast@gmail.com"
+git clone git@github.com:Frothbeast/myserver.git
+
+cd ~/.ssh && ssh-keygen
+/////// replace 'rsa' with the proper key that was just made ///////
+cat ~/.ssh/id_rsa.pub
+/////// copy the line and paste in in github click top right pic, settings, add ssh key ///////
+ git clone git@github.com:Frothbeast/myserver.git
 
 
