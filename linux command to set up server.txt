@@ -1,12 +1,42 @@
-npm init
-npm i --save body-parser
-npm i --save dotenv
-npm i --save express
-npm i --save mysql2
-npm i --save pug
-npm i --save nodemon
+/////use USB stick to install ubuntu
+/////find IP of machine
+/////log in with laptop from local LAN without nordvpn
+sudo apt update
+sudo apt upgrade
+sh <(curl -sSf https://downloads.nordcdn.com/apps/linux/install.sh)
+sudo groupadd nordvpn
+sudo usermod -aG nordvpn $USER
+////////reboot/////////
 
+nordvpn login --token <token>
+nordvpn connect
+
+/////// go to server /////////
+nordvpn connect(if not connected)
+nordvpn set meshnet on
+
+/////// back to terminal find ip in nordvpn meshnet ////////
+
+/////// create a database ////////
+sudo apt install mysql-server
+sudo systemctl start mysql
 sudo mysql -u root -p
+CREATE DATABASE IF NOT EXISTS frothbeast;
+use frothbeast;
+CREATE TABLE data (ID int, word varchar(50));
+INSERT INTO data VALUES (1, 'one');
+INSERT INTO data VALUES (2, 'two');
+INSERT INTO data VALUES (3, 'three');
+INSERT INTO data VALUES (4, 'four');
+INSERT INTO data VALUES (5, 'five');
 
-	CREATE DATABASE IF NOT EXISTS frothbeast;
-	use frothbeast;
+/////// install react ///////
+sudo apt install npm
+npm --version
+node --version
+
+sudo npm -g install create-react-app
+create-react-app --version
+
+
+
