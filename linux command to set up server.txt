@@ -63,8 +63,8 @@ npm start
 sudo apt install xsel
 sudo npm install serve -g
 npm run build 
-///////  start server using this terminal ////////
-serve -s -n build -l 8080 &> serverErrors.log &
+///////  start server using this terminal port 3000 ////////
+serve -s -n build &> serverErrors.log &
 
 ///////  server this as a service during startup /////////
 sudo npm install --global pm2
@@ -73,4 +73,4 @@ pm2 start npm -- start
 pm2 save
 pm2 startup
 sudo env PATH=$PATH:/usr/bin /usr/local/lib/node_modules/pm2/bin/pm2 startup systemd -u frothbeast --hp /home/frothbeast
-
+systemctl enable pm2-frothbeast
