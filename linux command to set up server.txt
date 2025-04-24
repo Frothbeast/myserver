@@ -14,7 +14,7 @@ nordvpn connect
 /////// go to server /////////
 nordvpn connect(if not connected)
 nordvpn set meshnet on
-
+nordvpn set autoconnect on
 /////// back to terminal find ip in nordvpn meshnet ////////
 
 /////// create a database ////////
