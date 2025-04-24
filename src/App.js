@@ -1,3 +1,5 @@
+import "./assets/css/App.css";
+
 import { useState, useEffect } from 'react';
     function App() {
         const [timeUp, setTimeUp] = useState(0);

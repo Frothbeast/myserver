@@ -35,6 +35,10 @@
       "last 1 firefox version",
       "last 1 safari version"
     ],
-     "homepage": "http://100.83.178.62/home/frothbeast/myserver/build/index.html"
-  }
+    "homepage": "http://100.83.178.62/home/frothbeast/myserver/build/index.html"
+  },
+  "description": "This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).",
+  "main": "index.js",
+  "author": "",
+  "license": "ISC"
 }
