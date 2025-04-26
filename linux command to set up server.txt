@@ -67,6 +67,8 @@ sudo npm install serve -g
 npm run build 
 ///////  start server using this terminal port 3000 ////////
 serve -s -n build &> serverErrors.log &
+/////// star apache server ///////////
+sudo apt install apache2-bin
 
 ///////  server this as a service during startup /////////
 sudo npm install --global pm2
