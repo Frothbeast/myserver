@@ -54,6 +54,8 @@ cat ~/.ssh/id_rsa.pub
 /////// install react dependencies /////////
 cd myserver/build
 npm install
+npm install cross-env --save-dev
+
 ///////  if the install hangs, reboot then: npm cache clean --force && npm i ///////////////
 npm start
 
