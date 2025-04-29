@@ -29,6 +29,7 @@ import { useState, useEffect } from 'react';
                 <h2>Session Time Since last reset {counter}</h2>
                 <h2>Number of clicks of reset {clickCounter}</h2>
                 <button onClick={btnClick} >reset timer</button>
+                <button >useless buttonr</button>
             </div>
         )
     }
