@@ -24,4 +24,4 @@
 
 
 @reboot /usr/bin/sudo /usr/bin/systemctl start mysqld
-@reboot /usr/bin/node /home/frothbeast/index.js
+@reboot /usr/bin/node /var/www/html/index.html

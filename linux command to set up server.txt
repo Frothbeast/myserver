@@ -3,19 +3,117 @@
 /////log in with laptop from local LAN without nordvpn
 sudo apt update
 sudo apt upgrade
-sh <(curl -sSf https://downloads.nordcdn.com/apps/linux/install.sh)
-sudo groupadd nordvpn
-sudo usermod -aG nordvpn $USER
+
+////// no ;onger using nordvpn for server
+/sh <(curl -sSf https://downloads.nordcdn.com/apps/linux/install.sh)
+/sudo groupadd nordvpn
+/sudo usermod -aG nordvpn $USER
 ////////reboot/////////
-
-nordvpn login --token <token>
-nordvpn connect
-
+/nordvpn login --token <token>
+/nordvpn connect
 /////// go to server /////////
-nordvpn connect(if not connected)
-nordvpn set meshnet on
-nordvpn set autoconnect on
+/nordvpn connect(if not connected)
+/nordvpn set meshnet on
+/nordvpn set autoconnect on
 /////// back to terminal find ip in nordvpn meshnet ////////
+
+/////// install react ///////
+sudo apt install npm
+npm --version
+node --version
+sudo npm -g install create-react-app
+create-react-app --version
+
+/////// start apache server ///////////
+cd /
+sudo apt install apache2
+sudo systemctl start apache2
+sudo systemctl enable apache2
+////// configure git //////////
+cd /var/www/html/
+sudo mkdir myserver
+
+git config --global user.name "frothbeast"
+git config --global user.email "frothbeast@gmail.com"
+sudo git clone https://github.com/Frothbeast/myserver.git
+
+
+///////////////// REMOVED ///////////////////////
+/cd ~/.ssh && ssh-keygen
+/////// replace 'rsa' with the proper key that was just made ///////
+/cat ~/.ssh/id_rsa.pub
+/////// copy the line and paste in in github click top right pic, settings, add ssh key ///////
+/ git clone git@github.com:Frothbeast/myserver.git
+////////////////////////////////////////////////
+
+//////// create a simlink   //////////////
+sudo ln -s /var/www/html/myserver/build/index.html index.html
+
+/////// install react dependencies /////////
+cd /var/www/html/myserver
+sudo npm install
+sudo npm install cross-env --save-dev
+sudo npm run build
+
+///////  if the install hangs, reboot then: npm cache clean --force && npm i ///////////////
+/npm start
+
+
+////// set up server to start on boot /////
+/sudo apt install xsel
+/sudo npm install serve -g
+/npm run build 
+///////  start server using this terminal port 3000 ////////
+/serve -s -n build &> serverErrors.log &
+
+
+///////  server this as a service during startup /////////
+sudo npm install --global pm2
+ cd build
+pm2 start npm -- start
+pm2 save
+pm2 startup
+sudo env PATH=$PATH:/usr/bin /usr/local/lib/node_modules/pm2/bin/pm2 startup systemd -u frothbeast --hp /home/frothbeast
+systemctl enable pm2-frothbeast
+
+//////// get a ddns updater
+/// got ddns-updater by qmcgaw on docker and pull the image his github explains it all
+cd/
+curl -fsSL https://get.docker.com/ | sh
+sudo usermod -aG docker frothbeast
+sudo docker run hello-world
+cd /usr/local
+sudo wget /usr/local/ "https://go.dev/dl/go1.24.2.linux-amd64.tar.gz"
+sudo tar -C /usr/local -xzf go1.24.2.linux-amd64.tar.gz
+export PATH=$PATH:/usr/local/go/bin
+go install github.com/qdm12/ddns-updater/cmd/ddns-updater@latest
+cd /home/frothbeast/go/bin/
+chmod +x ddns-updater
+mkdir data
+sudo nano config.json
+
+{
+  "settings": [
+    {
+      "provider": "freedns",
+      "domain": "frothbeast.nard.ca",
+      "token": "http://sync.afraid.org/u/HJSsp4Hd7FPKHzL2RuSnCu2p/",
+      "ip_version": "ipv4",
+      "ipv6_suffix": ""
+    }
+  ]
+}
+
+crontab -e
+//// paste this into the end of the file and cntl-s to save cntl-x to exit///
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin
+2,7,12,17,22,27,32,37,42,47,52,57 * * * * sleep 49 ; curl -s http://sync.afraid.org/u/HJSsp4Hd7FPKHzL2RuSnCu2p/ >> /tmp/freedns_frothbeast_nard_ca.log 2>/dev/null
+
+////
+
+sudo apt install firewalld
+sudo firewall-cmd --zone=public --add-port=80/tcp --permanent
 
 /////// create a database ////////
 sudo apt install mysql-server
@@ -30,51 +128,3 @@ INSERT INTO data VALUES (3, 'three');
 INSERT INTO data VALUES (4, 'four');
 INSERT INTO data VALUES (5, 'five');
 
-/////// install react ///////
-sudo apt install npm
-npm --version
-node --version
-
-sudo npm -g install create-react-app
-create-react-app --version
-
-////// configure git //////////
-mkdir myserver
-
-git config --global user.name "frothbeast"
-git config --global user.email "frothbeast@gmail.com"
-git clone git@github.com:Frothbeast/myserver.git
-
-cd ~/.ssh && ssh-keygen
-/////// replace 'rsa' with the proper key that was just made ///////
-cat ~/.ssh/id_rsa.pub
-/////// copy the line and paste in in github click top right pic, settings, add ssh key ///////
- git clone git@github.com:Frothbeast/myserver.git
-
-/////// install react dependencies /////////
-cd myserver/build
-npm install
-npm install cross-env --save-dev
-
-///////  if the install hangs, reboot then: npm cache clean --force && npm i ///////////////
-npm start
-
-///// you can now  visit the site http://<serverip>:3000           ///////////////
-
-////// set up server to start on boot /////
-sudo apt install xsel
-sudo npm install serve -g
-npm run build 
-///////  start server using this terminal port 3000 ////////
-serve -s -n build &> serverErrors.log &
-/////// star apache server ///////////
-sudo apt install apache2-bin
-
-///////  server this as a service during startup /////////
-sudo npm install --global pm2
- cd build
-pm2 start npm -- start
-pm2 save
-pm2 startup
-sudo env PATH=$PATH:/usr/bin /usr/local/lib/node_modules/pm2/bin/pm2 startup systemd -u frothbeast --hp /home/frothbeast
-systemctl enable pm2-frothbeast

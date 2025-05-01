@@ -35,7 +35,7 @@
       "last 1 firefox version",
       "last 1 safari version"
     ],
-    "homepage": "http://frothbeast.nard.ca/home/frothbeast/myserver/build/index.html"
+    "homepage": "http://frothbeast.nard.ca/var/www/html/myserver/build/index.html"
   },
   "description": "This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).",
   "main": "index.js",
