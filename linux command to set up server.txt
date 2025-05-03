@@ -1,5 +1,5 @@
-/////use USB stick to install ubuntu
-/////find IP of machine
+/////use USB stick to install ubuntu DO NOT USE GIT SSH KEY UNLESS YOU LIKE FAILING
+/////find IP of machine I used static ip 192.168.50.26
 /////log in with laptop from local LAN without nordvpn
 sudo apt update
 sudo apt upgrade
@@ -109,6 +109,8 @@ sudo firewall-cmd --reload
 //// Listen 0.0.0.0:22
 //// You may also need to modify virtual host configurations in the sites-available
 	 or sites-enabled directories to reflect the new port(s)
+
+///// ip addr add 192.168.50.26/24 dev enp1s0
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
