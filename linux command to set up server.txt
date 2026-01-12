@@ -116,15 +116,14 @@ sudo apt install firewalld
 sudo firewall-cmd --zone=public --add-port=80/tcp --permanent
 
 /////// create a database ////////
+cd /
 sudo apt install mysql-server
 sudo systemctl start mysql
 sudo mysql -u root -p
 CREATE DATABASE IF NOT EXISTS frothbeast;
 use frothbeast;
-CREATE TABLE data (ID int, word varchar(50));
-INSERT INTO data VALUES (1, 'one');
-INSERT INTO data VALUES (2, 'two');
-INSERT INTO data VALUES (3, 'three');
-INSERT INTO data VALUES (4, 'four');
-INSERT INTO data VALUES (5, 'five');
+CREATE TABLE data (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    word TEXT
+);
 
