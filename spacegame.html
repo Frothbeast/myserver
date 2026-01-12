@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Particle Emitter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tone.js library for audio synthesis -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <style>
+        /* Apply inter font family */
+        body {
+            font-family: "Inter", sans-serif;
+            margin: 0;
+            overflow: hidden; /* Hide scrollbars */
+            cursor: none; /* Hide default mouse cursor */
+        }
+        canvas {
+            display: block;
+            background-color: black;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 0; /* Ensure canvas is behind text */
+        }
+        /* Style for vertical slider */
+        input[type="range"][orient="vertical"] {
+            -webkit-appearance: slider-vertical; /* For WebKit browsers */
+            writing-mode: bt-lr; /* For Firefox */
+            width: 8px; /* Adjust width as needed */
+            height: 100px; /* Adjust height as needed */
+            padding: 0 5px; /* Add some padding */
+        }
+    </style>
+</head>
+<body>
+    <div class="relative w-screen h-screen overflow-hidden bg-black flex items-center justify-center">
+        <!-- Canvas element for drawing the particles -->
+        <canvas id="particleCanvas"></canvas>
+
+        <!-- Controls Legend -->
+        <div class="absolute bottom-0 left-0 z-20 bg-gray-800 bg-opacity-70 p-2 rounded-t-lg shadow-lg text-white text-xs sm:text-sm px-4">
+            <h3 class="font-bold mb-1">Controls:</h3>
+            <ul class="list-disc list-inside">
+                <li><span class="font-semibold">Mouse:</span> Fly</li>
+                <li><span class="font-semibold">Left Click:</span> Lasers</li>
+                <li><span class="font-semibold">Right Click:</span> Hyperdrive</li>
+                <li><span class="font-semibold">[/] Keys:</span> Speed</li>
+            </ul>
+        </div>
+
+        <!-- Speed HUD -->
+        <div id="speedHud" class="absolute top-4 right-4 z-20 bg-gray-800 bg-opacity-70 p-3 rounded-lg shadow-lg text-white text-lg font-bold">
+            Speed: <span id="currentSpeedValue">0</span>
+        </div>
+
+        <!-- Volume Slider -->
+        <div class="absolute top-1/2 right-4 transform -translate-y-1/2 z-20 bg-gray-800 bg-opacity-70 p-2 rounded-lg shadow-lg flex flex-col items-center">
+            <label for="volumeSlider" class="text-white text-sm mb-2">Volume</label>
+            <input type="range" id="volumeSlider" orient="vertical" min="0" max="100" value="100" class="h-24 w-2">
+        </div>
+    </div>
+
+    <script>
+        // Get the canvas element and its 2D rendering context
+        const canvas = document.getElementById('particleCanvas');
+        const context = canvas.getContext('2d');
+        const speedHudValue = document.getElementById('currentSpeedValue'); // Get the HUD element
+        const volumeSlider = document.getElementById('volumeSlider'); // Get the volume slider element
+
+        // Configuration for the particles
+        const PARTICLE_COUNT = 2560; // Reduced particle count
+        const PARTICLE_MIN_VISIBLE_RADIUS = 0.2; // Made smaller
+        const PARTICLE_MAX_VISIBLE_RADIUS = 8.0; // Made smaller
+        const PARTICLE_SIZE_GROWTH_FACTOR = 1.2;
+
+        const FOCAL_DISTANCE = 500;
+
+        // Variables for particle speed control
+        const BASE_PARTICLE_SPEED_Z = 0.040; // Initial speed set to 0.040 for HUD display of 40
+        let currentParticleSpeedZ = BASE_PARTICLE_SPEED_Z;
+        const PARTICLE_SPEED_CHANGE_RATE = 0.001;
+        const MAX_PARTICLE_SPEED_Z = 0.1; // Max speed (displayed as 100)
+        const MIN_PARTICLE_SPEED_Z = 0.010; // Min speed (displayed as 10)
+
+        // Variables for controlling the vanishing point (crosshair position on screen)
+        let vanishingPointX = 0;
+        let vanishingPointY = 0;
+
+        // Constants for dynamic speed based on distance to crosshair
+        const MIN_DISTANCE_SPEED_FACTOR = 0.05;
+        const MAX_DISTANCE_SPEED_FACTOR = 2.0;
+        const DISTANCE_THRESHOLD_FOR_FULL_EFFECT = 400;
+
+        const SCREEN_REPEL_BASE_FACTOR = 100.0;
+        const MAX_LATERAL_WORLD_SPEED = 5000;
+
+        // Spawn delay frames (for normal particle generation) - Reintroduced for smoother generation
+        const MIN_SPAWN_DELAY_FRAMES = 0; // Some particles can appear immediately
+        const MAX_SPAWN_DELAY_FRAMES = 300; // Increased delay (5 seconds at 60 FPS)
+
+        let isHyperdriveActive = false; // This flag now indicates if the hyperdrive screen-clear effect is active
+        const HYPERDRIVE_ABSOLUTE_SPEED_Z = 0.2;
+        const HYPERDRIVE_TRACER_ALPHA = 0.2;
+        // Removed HYPERDRIVE_TRACER_DURATION_FRAMES as it's not used in this hyperdrive mode
+
+        // Icon (Two Disks) parameters
+        const ICON_DISC_RADIUS = 5;
+        const ICON_Z_DEPTH = 50;
+
+        let particles = [];
+        let diskTracers = [];
+        const DISK_TRACER_TRAIL_LENGTH = 30;
+        const DISK_TRACER_TRAVEL_SPEED = 10;
+        const DISK_TRACER_FADE_START_DISTANCE = 100;
+        const DISK_TRACER_COOLDOWN_FRAMES = 15; // Halved cooldown frames for faster firing
+        let diskTracerCooldown = 0; // Current cooldown counter
+
+        // Global variable for traced particles count
+        let tracedParticlesOffScreenCount = 0;
+
+        // Mouse state variables
+        let isLeftMouseDown = false;
+
+        // New constants for controlling spawn chance based on speed
+        const MIN_RESPAWN_CHANCE = 0.1; // Minimum chance to respawn (at MIN_PARTICLE_SPEED_Z)
+        const MAX_RESPAWN_CHANCE = 1.0; // Maximum chance to respawn (at MAX_PARTICLE_SPEED_Z)
+
+        // --- Tone.js Audio Setup ---
+        let audioContextStarted = false;
+        let turbineNoise;
+        let turbineFilter;
+        let turbineVolume;
+        let turbineDistortion; // New distortion for jet sound
+        let chirpSynth;
+        let chirpVolume; // New volume node for chirps
+        let hyperdriveAlarmSynth; // New synth for hyperdrive alarm
+        let hyperdriveAlarmLFO; // LFO for hyperdrive alarm
+        let hyperdriveAlarmVolume; // New volume node for hyperdrive alarm
+        let masterToDestination; // Master volume node
+
+        // Function to initialize audio (called on first user interaction)
+        function initAudio() {
+            if (audioContextStarted) return;
+            Tone.start();
+            audioContextStarted = true;
+
+            // Master volume node
+            masterToDestination = new Tone.Volume(0).toDestination(); // Start at 0dB (full volume)
+
+            // Turbine sound: Pink noise filtered to sound like a jet
+            turbineNoise = new Tone.Noise("pink").start();
+            turbineFilter = new Tone.Filter(150, "bandpass"); // Lower frequency for deeper rumble
+            turbineFilter.Q.value = 0.8; // Slightly wider Q for more body
+            turbineDistortion = new Tone.Distortion(0.1).toDestination(); // Subtle distortion for grit
+            turbineVolume = new Tone.Volume(-30); // Initial volume for turbine (decreased by factor of 10)
+
+            // Connect nodes for turbine sound
+            turbineNoise.connect(turbineFilter);
+            turbineFilter.connect(turbineDistortion); // Connect to distortion
+            turbineDistortion.connect(turbineVolume); // Then to volume
+            turbineVolume.connect(masterToDestination); // Finally to master volume
+
+            // Chirp sound: PolySynth with AM Synth voice for a laser sound
+            chirpVolume = new Tone.Volume(0).connect(masterToDestination); // Set to 0dB for louder laser
+            chirpSynth = new Tone.PolySynth(Tone.AMSynth, { // Changed to AMSynth for a sharper laser sound
+                oscillator: {
+                    type: "sine"
+                },
+                envelope: {
+                    attack: 0.001, // Very short attack
+                    decay: 0.1,  // Increased decay
+                    sustain: 0,
+                    release: 0.05 // Increased release
+                },
+                harmonicity: 3, // Adjusted for more metallic sound
+                modulationIndex: 5 // Adjusted for more metallic sound
+            }).connect(chirpVolume);
+
+            // Hyperdrive alarm sound (siren)
+            hyperdriveAlarmVolume = new Tone.Volume(-10).connect(masterToDestination); // Initial volume for alarm
+            hyperdriveAlarmSynth = new Tone.Synth({
+                oscillator: {
+                    type: "sine" // Sine wave for a smoother siren
+                },
+                envelope: {
+                    attack: 0.01,
+                    decay: 0.1,
+                    sustain: 0.1,
+                    release: 0.1
+                }
+            }).connect(hyperdriveAlarmVolume);
+
+            hyperdriveAlarmLFO = new Tone.LFO(10, 400, 800); // 10 Hz, sweeps between 400Hz and 800Hz
+            hyperdriveAlarmLFO.type = "sine"; // Sine wave for smooth frequency modulation
+            hyperdriveAlarmLFO.connect(hyperdriveAlarmSynth.frequency); // Connect LFO to synth's frequency
+
+
+            // Set initial volume based on slider
+            updateMasterVolume(volumeSlider.value);
+        }
+
+        // Function to update master volume based on slider value
+        function updateMasterVolume(sliderValue) {
+            if (!masterToDestination) return;
+            // Map slider value (0-100) to a decibel range (-60dB to 0dB)
+            // 0 -> -60dB (effectively silent)
+            // 100 -> 0dB (full volume)
+            const minDb = -60;
+            const maxDb = 0;
+            const mappedDb = minDb + (sliderValue / 100) * (maxDb - minDb);
+            masterToDestination.volume.rampTo(mappedDb, 0.05); // Smooth transition
+        }
+
+        // Add event listener for volume slider
+        volumeSlider.addEventListener('input', (event) => {
+            initAudio(); // Ensure audio context is started
+            updateMasterVolume(event.target.value);
+        });
+
+
+        // Helper functions (unchanged)
+        function vec3(x, y, z) { return { x, y, z }; }
+        function sub(v1, v2) { return vec3(v1.x - v2.x, v1.y - v2.y, v1.z - v2.z); }
+        function add(v1, v2) { return vec3(v1.x + v2.x, v1.y + v2.y, v1.z + v2.z); }
+        function mulScalar(v, s) { return vec3(v.x * s, v.y * s, v.z * s); }
+        function dot(v1, v2) { return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z; }
+        function magnitude(v) { return Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z); }
+        function normalize(v) {
+            const mag = magnitude(v);
+            if (mag === 0) return vec3(0, 0, 0);
+            return vec3(v.x / mag, v.y / mag, v.z / mag);
+        }
+
+        /**
+         * Creates a single particle object with random initial absolute 3D coordinates and velocity.
+         * @param {boolean} isPostHyperdriveReset - True if this reset is happening after hyperdrive.
+         */
+        function createParticle(isPostHyperdriveReset = false) {
+            const width = canvas.width;
+            const height = canvas.height;
+
+            // Random Z position within a visible range.
+            const initialZ = Math.random() * (FOCAL_DISTANCE * 5 - FOCAL_DISTANCE * 0.5) + FOCAL_DISTANCE * 0.5;
+
+            // Generate screen coordinates for the initial spawn point (randomly across the screen).
+            const screenSpawnX = Math.random() * width;
+            const screenSpawnY = Math.random() * height;
+
+            // Convert screen coordinates back to 3D world coordinates at initialZ.
+            const particleX = (screenSpawnX - width / 2) * (initialZ / FOCAL_DISTANCE);
+            const particleY = (screenSpawnY - height / 2) * (initialZ / FOCAL_DISTANCE);
+
+            return {
+                x: particleX,
+                y: particleY,
+                z: initialZ,
+                vx: 0,
+                vy: 0,
+                vz: -currentParticleSpeedZ, // Initial vz based on currentParticleSpeedZ
+                color: `rgba(255, 255, 255, ${0.5 + Math.random() * 0.5})`,
+                // Reintroduced random delay for smoother generation
+                delay: isPostHyperdriveReset ? 0 : Math.floor(Math.random() * (MAX_SPAWN_DELAY_FRAMES - MIN_SPAWN_DELAY_FRAMES + 1)) + MIN_SPAWN_DELAY_FRAMES,
+                active: true,
+                isTraced: false, // Default to false
+                tracerStartX: null,
+                tracerStartY: null
+                // Removed tracerDuration
+            };
+        }
+
+        function setCanvasDimensions(isPostHyperdriveReset = false) {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            // Initialize vanishing point (crosshair) to the center of the canvas on load/resize
+            vanishingPointX = canvas.width / 2;
+            vanishingPointY = canvas.height / 2;
+            // Pass isPostHyperdriveReset to createParticle when re-initializing all particles
+            particles = Array.from({ length: PARTICLE_COUNT }).map(() => createParticle(isPostHyperdriveReset));
+        }
+
+        // Function to emit disk tracers
+        function emitDiskTracers() {
+            // Only emit if cooldown allows
+            if (diskTracerCooldown > 0) {
+                return;
+            }
+
+            // Play blaster sound
+            if (audioContextStarted && chirpSynth) {
+                // Trigger the AMSynth with a specific frequency and duration
+                chirpSynth.triggerAttackRelease("C5", "128n");
+                chirpSynth.triggerAttackRelease("G5", "128n", Tone.now() + 0.0125);
+            }
+
+            // Calculate current icon positions
+            const iconScreenX = canvas.width / 2;
+            const iconScreenY = canvas.height * (5/6); 
+            const iconZ = ICON_Z_DEPTH;
+            const iconProjectedScale = FOCAL_DISTANCE / iconZ;
+            const scaledDiscRadius = ICON_DISC_RADIUS * iconProjectedScale;
+            const discSeparation = scaledDiscRadius * 1.5; 
+            const leftDiskCenterX = -discSeparation / 2;
+            const rightDiskCenterX = discSeparation / 2;
+
+            // Create tracer for left disk
+            let leftDiskAbsX = iconScreenX + leftDiskCenterX;
+            let leftDiskAbsY = iconScreenY;
+            let vecToCrosshairLeftX = vanishingPointX - leftDiskAbsX;
+            let vecToCrosshairLeftY = vanishingPointY - leftDiskAbsY;
+            let magLeft = Math.sqrt(vecToCrosshairLeftX*vecToCrosshairLeftX + vecToCrosshairLeftY*vecToCrosshairLeftY);
+            diskTracers.push({
+                startX: leftDiskAbsX,
+                startY: leftDiskAbsY,
+                dirX: vecToCrosshairLeftX / magLeft,
+                dirY: vecToCrosshairLeftY / magLeft,
+                distanceTraveled: 0,
+                totalDistanceToCrosshair: magLeft,
+                alpha: 1.0
+            });
+
+            // Create tracer for right disk
+            let rightDiskAbsX = iconScreenX + rightDiskCenterX;
+            let rightDiskAbsY = iconScreenY;
+            let vecToCrosshairRightX = vanishingPointX - rightDiskAbsX;
+            let vecToCrosshairRightY = vanishingPointY - rightDiskAbsY;
+            let magRight = Math.sqrt(vecToCrosshairRightX*vecToCrosshairRightX + vecToCrosshairRightY*vecToCrosshairRightY);
+            diskTracers.push({
+                startX: rightDiskAbsX,
+                startY: rightDiskAbsY,
+                dirX: vecToCrosshairRightX / magRight,
+                dirY: vecToCrosshairRightY / magRight,
+                distanceTraveled: 0,
+                totalDistanceToCrosshair: magRight,
+                alpha: 1.0
+            });
+
+            diskTracerCooldown = DISK_TRACER_COOLDOWN_FRAMES; // Reset cooldown
+        }
+
+
+        // Event listeners for mouse control and speed control
+        window.addEventListener('keydown', (event) => {
+            initAudio(); // Initialize audio context on first keydown
+            switch (event.key) {
+                case ']': // Increase particle speed
+                    currentParticleSpeedZ = Math.min(MAX_PARTICLE_SPEED_Z, currentParticleSpeedZ + PARTICLE_SPEED_CHANGE_RATE);
+                    break;
+                case '[': // Decrease particle speed
+                    currentParticleSpeedZ = Math.max(MIN_PARTICLE_SPEED_Z, currentParticleSpeedZ - PARTICLE_SPEED_CHANGE_RATE);
+                    break;
+            }
+        });
+
+        // Mouse move to control crosshair
+        canvas.addEventListener('mousemove', (event) => {
+            vanishingPointX = event.clientX;
+            vanishingPointY = event.clientY;
+        });
+
+        // Mouse down for shoot (left click) and hyperdrive (right click)
+        canvas.addEventListener('mousedown', (event) => {
+            initAudio(); // Initialize audio context on first mousedown
+            if (event.button === 0) { // Left click
+                isLeftMouseDown = true;
+                emitDiskTracers(); // Emit immediately on first click
+            } else if (event.button === 2) { // Right click
+                event.preventDefault(); // Prevent context menu
+                if (!isHyperdriveActive) {
+                    isHyperdriveActive = true;
+                    // Play hyperdrive alarm sound
+                    if (audioContextStarted && hyperdriveAlarmSynth && hyperdriveAlarmLFO) {
+                        hyperdriveAlarmLFO.start();
+                        hyperdriveAlarmSynth.triggerAttack();
+                        // Stop the alarm after a short duration
+                        Tone.Transport.scheduleOnce(() => {
+                            hyperdriveAlarmSynth.triggerRelease();
+                            hyperdriveAlarmLFO.stop();
+                        }, Tone.now() + 1.5); // Alarm lasts for 1.5 seconds
+                    }
+                    // Iterate through particles to set their hyperdrive speed and tracer properties
+                    particles.forEach(p => {
+                        // Calculate screen position for current particle to determine visibility
+                        const sx_p = (p.x / p.z) * FOCAL_DISTANCE + canvas.width / 2;
+                        const sy_p = (p.y / p.z) * FOCAL_DISTANCE + canvas.height / 2;
+
+                        // Define visibility based on being within canvas bounds and not behind the camera
+                        const isVisible = sx_p > -PARTICLE_MAX_VISIBLE_RADIUS && sx_p < canvas.width + PARTICLE_MAX_VISIBLE_RADIUS &&
+                                          sy_p > -PARTICLE_MAX_VISIBLE_RADIUS && sy_p < canvas.height + PARTICLE_MAX_VISIBLE_RADIUS &&
+                                          p.z > 1;
+
+                        if (isVisible) {
+                            p.isTraced = true;
+                            p.tracerStartX = sx_p; // Capture initial screen position for tracer
+                            p.tracerStartY = sy_p; // Capture initial screen position for tracer
+                        } else {
+                            p.isTraced = false; // Ensure it's false if not visible
+                            p.tracerStartX = null; // Clear tracer start if not visible
+                            p.tracerStartY = null; // Clear tracer start if not visible
+                        }
+                        // Set hyperdrive speed for all active particles to the absolute target speed
+                        p.vz = -HYPERDRIVE_ABSOLUTE_SPEED_Z; // Use the new absolute speed
+                    });
+                }
+            }
+        });
+
+        // Mouse up to stop continuous firing
+        canvas.addEventListener('mouseup', (event) => {
+            if (event.button === 0) { // Left click
+                isLeftMouseDown = false;
+            }
+        });
+
+
+        // Prevent context menu on right click for the entire document
+        document.addEventListener('contextmenu', (event) => {
+            event.preventDefault();
+        });
+
+        function animate() {
+            if (context) {
+                context.globalAlpha = 1.0;
+                context.fillStyle = 'black';
+                context.fillRect(0, 0, canvas.width, canvas.height);
+            } else {
+                console.error('Canvas context is null! Cannot animate.');
+                requestAnimationFrame(animate);
+                return;
+            }
+
+            if (speedHudValue) {
+                speedHudValue.textContent = Math.round(currentParticleSpeedZ * 1000);
+            }
+
+            // Update turbine sound based on speed
+            if (audioContextStarted && turbineFilter && turbineVolume) {
+                // Map speed (0.010 to 0.1) to filter frequency (e.g., 150 Hz to 800 Hz)
+                const freqRange = 800 - 150; // Adjusted range for rocket sound
+                const speedNormalized = (currentParticleSpeedZ - MIN_PARTICLE_SPEED_Z) / (MAX_PARTICLE_SPEED_Z - MIN_PARTICLE_SPEED_Z);
+                const targetFreq = 150 + (speedNormalized * freqRange);
+                turbineFilter.frequency.rampTo(targetFreq, 0.1); // Smooth transition
+
+                // Map speed to volume (e.g., -30 dB to -20 dB) for quieter jet sound
+                const volRange = -20 - (-30); 
+                const targetVol = -30 + (speedNormalized * volRange); 
+                turbineVolume.volume.rampTo(targetVol, 0.1); // Smooth transition
+            }
+
+
+            // If left mouse button is down, emit tracers (respecting cooldown)
+            if (isLeftMouseDown) {
+                emitDiskTracers();
+            }
+            // Decrease cooldown
+            if (diskTracerCooldown > 0) {
+                diskTracerCooldown--;
+            }
+
+
+            // Particle update and draw logic
+            for (let i = 0; i < particles.length; i++) {
+                let particle = particles[i];
+
+                // If hyperdrive is active, and this particle is NOT traced, or it's already off-screen, skip drawing it as a point.
+                // We only want to draw tracers for traced particles, and no points during hyperdrive.
+                if (isHyperdriveActive && !particle.isTraced && !particle.active) {
+                    continue; // Skip inactive, non-traced particles during hyperdrive
+                }
+
+                // Check for delay before moving the particle (only if not hyperdrive)
+                if (particle.delay > 0 && !isHyperdriveActive) {
+                    particle.delay--;
+                    continue; // Skip drawing and movement logic for delayed particles
+                }
+
+                // Update particle's position based on its velocity
+                particle.x += particle.vx;
+                particle.y += particle.vy;
+                particle.z += particle.vz; // Move particle towards camera
+                if (particle.z <= 0) particle.z = 0.01;
+
+                // Recalculate screen position after Z update
+                const sx_particle = (particle.x / particle.z) * FOCAL_DISTANCE + canvas.width / 2;
+                const sy_particle = (particle.y / particle.z) * FOCAL_DISTANCE + canvas.height / 2;
+
+                // --- Draw Tracer Line if Hyperdrive is active and particle is traced ---
+                if (isHyperdriveActive && particle.isTraced) {
+                    // Only draw tracer if it has a valid start point (meaning it was visible when H was pressed)
+                    if (particle.tracerStartX !== null && particle.tracerStartY !== null) {
+                        context.beginPath();
+                        context.moveTo(particle.tracerStartX, particle.tracerStartY);
+                        context.lineTo(sx_particle, sy_particle);
+                        context.strokeStyle = `rgba(255, 255, 255, ${HYPERDRIVE_TRACER_ALPHA})`; // White tracer with specific alpha
+                        context.lineWidth = 1; // Tracer line width
+                        context.stroke();
+                    }
+                    // Update tracer start for next frame's segment ONLY IF HYPERDRIVE IS ACTIVE AND PARTICLE IS TRACED
+                    particle.tracerStartX = sx_particle;
+                    particle.tracerStartY = sy_particle;
+                }
+
+                // Define current Z speed and lateral repulsion base speed based on hyperdrive state
+                let currentParticleZSpeed;
+                let currentLateralRepelSpeedBase;
+
+                if (isHyperdriveActive) {
+                    currentParticleZSpeed = HYPERDRIVE_ABSOLUTE_SPEED_Z;
+                    currentLateralRepelSpeedBase = SCREEN_REPEL_BASE_FACTOR * HYPERDRIVE_ABSOLUTE_SPEED_Z;
+                } else { // Normal mode
+                    const distance2DToCrosshair = Math.sqrt(
+                        Math.pow(sx_particle - vanishingPointX, 2) +
+                        Math.pow(sy_particle - vanishingPointY, 2)
+                    );
+
+                    let speedMultiplier = 1.0;
+                    if (distance2DToCrosshair < DISTANCE_THRESHOLD_FOR_FULL_EFFECT) {
+                        speedMultiplier = MIN_DISTANCE_SPEED_FACTOR +
+                                          (MAX_DISTANCE_SPEED_FACTOR - MIN_DISTANCE_SPEED_FACTOR) *
+                                          (distance2DToCrosshair / DISTANCE_THRESHOLD_FOR_FULL_EFFECT);
+                    } else {
+                        speedMultiplier = MAX_DISTANCE_SPEED_FACTOR;
+                    }
+                    speedMultiplier = Math.max(MIN_DISTANCE_SPEED_FACTOR, Math.min(MAX_DISTANCE_SPEED_FACTOR, speedMultiplier));
+
+                    currentParticleZSpeed = currentParticleSpeedZ * speedMultiplier;
+                    currentLateralRepelSpeedBase = SCREEN_REPEL_BASE_FACTOR * currentParticleZSpeed; // Changed to use currentParticleZSpeed
+                }
+
+                particle.vz = -currentParticleZSpeed; // Apply the calculated Z speed
+
+                // --- Dynamic Lateral Repulsion --- (This part is mostly the same)
+                const distance2DToCrosshairForRepulsion = Math.sqrt(
+                    Math.pow(sx_particle - vanishingPointX, 2) +
+                    Math.pow(sy_particle - vanishingPointY, 2)
+                );
+
+                if (distance2DToCrosshairForRepulsion > 0) {
+                    const normalizedDx_2d = (sx_particle - vanishingPointX) / distance2DToCrosshairForRepulsion;
+                    const normalizedDy_2d = (sy_particle - vanishingPointY) / distance2DToCrosshairForRepulsion;
+                    const repelSpeedFactor = currentLateralRepelSpeedBase * (particle.z / FOCAL_DISTANCE);
+                    particle.vx = normalizedDx_2d * repelSpeedFactor;
+                    particle.vy = normalizedDy_2d * repelSpeedFactor;
+                    const currentLateralSpeed = Math.sqrt(particle.vx * particle.vx + particle.vy * particle.vy);
+                    if (currentLateralSpeed > MAX_LATERAL_WORLD_SPEED) {
+                        const scaleFactor = MAX_LATERAL_WORLD_SPEED / currentLateralSpeed;
+                        particle.vx *= scaleFactor;
+                        particle.vy *= scaleFactor;
+                    }
+                } else {
+                    const angle = Math.random() * Math.PI * 2;
+                    const initialRepelSpeed = currentLateralRepelSpeedBase * (particle.z / FOCAL_DISTANCE);
+                    particle.vx = Math.cos(angle) * initialRepelSpeed;
+                    particle.vy = Math.sin(angle) * initialRepelSpeed;
+                }
+
+                // Respawn logic (modified for hyperdrive)
+                const respawnBuffer = Math.max(canvas.width, canvas.height);
+                const isOffScreen = particle.z <= 1 || sx_particle < -respawnBuffer || sx_particle > canvas.width + respawnBuffer || sy_particle < -respawnBuffer || sy_particle > canvas.height + respawnBuffer;
+
+                if (isHyperdriveActive) {
+                    if (isOffScreen) {
+                        if (particle.isTraced) { // Only count if it was a traced particle
+                            tracedParticlesOffScreenCount++;
+                        }
+                        particle.active = false; // Mark as inactive, don't respawn yet
+                        continue; // Skip drawing the particle if it's off-screen during hyperdrive
+                    }
+                } else { // Normal mode
+                    if (isOffScreen) {
+                        const speedRange = MAX_PARTICLE_SPEED_Z - MIN_PARTICLE_SPEED_Z;
+                        const normalizedSpeed = speedRange > 0 ? (currentParticleSpeedZ - MIN_PARTICLE_SPEED_Z) / speedRange : 0;
+                        const spawnChance = MIN_RESPAWN_CHANCE + (MAX_RESPAWN_CHANCE - MIN_RESPAWN_CHANCE) * normalizedSpeed;
+
+                        if (Math.random() < spawnChance) {
+                            particles[i] = createParticle(); // Respawn normally
+                        } else {
+                            particle.active = false; // Mark current particle as inactive
+                        }
+                        continue; // Continue to next particle
+                    }
+                }
+
+                // Calculate the size of the particle
+                const rawSize = PARTICLE_SIZE_GROWTH_FACTOR * (FOCAL_DISTANCE / particle.z);
+                const sSize = Math.max(PARTICLE_MIN_VISIBLE_RADIUS, Math.min(PARTICLE_MAX_VISIBLE_RADIUS, rawSize));
+
+                // Draw the particle only if its calculated size is positive and it's active
+                // AND not in hyperdrive mode (tracers are drawn separately)
+                if (sSize > 0 && particle.active && !isHyperdriveActive) {
+                    context.beginPath();
+                    context.arc(sx_particle, sy_particle, sSize, 0, Math.PI * 2);
+                    context.fillStyle = particle.color;
+                    context.fill();
+                }
+            }
+
+            // Hyperdrive completion check: Check if all *traced* particles are off-screen
+            if (isHyperdriveActive) {
+                const totalTracedParticles = particles.filter(p => p.isTraced).length;
+                const actualTracedParticlesOffScreen = particles.filter(p => p.isTraced && !p.active).length;
+
+                if (totalTracedParticles > 0 && actualTracedParticlesOffScreen === totalTracedParticles) {
+                    isHyperdriveActive = false; // End hyperdrive
+                    setCanvasDimensions(true); // Reinitialize all particles to bring them back on screen
+                } else if (totalTracedParticles === 0 && particles.filter(p => !p.active).length === PARTICLE_COUNT) {
+                    // Fallback: if no particles were traced, clear when all particles are off screen
+                    isHyperdriveActive = false;
+                    setCanvasDimensions(true);
+                }
+            }
+
+            // --- Draw the Two Icon Disks ---
+            const iconScreenX = canvas.width / 2;
+            const iconScreenY = canvas.height * (5/6); 
+            const iconZ = ICON_Z_DEPTH;
+            const iconProjectedScale = FOCAL_DISTANCE / iconZ;
+            const scaledDiscRadius = ICON_DISC_RADIUS * iconProjectedScale;
+            const discSeparation = scaledDiscRadius * 1.5; 
+
+            const dx_iconToCrosshair = vanishingPointX - iconScreenX;
+            const maxHorizontalScreenDistance = canvas.width / 2;
+            const tiltFactor = Math.min(1, Math.abs(dx_iconToCrosshair) / (maxHorizontalScreenDistance * 0.7));
+            const tiltSeverityMultiplier = 0.5;
+            const adjustedTiltFactor = tiltFactor * tiltSeverityMultiplier;
+            const maxTiltAngle = Math.PI / 2 - 0.05;
+            const tilt_angle = (1 - adjustedTiltFactor) * maxTiltAngle; 
+            const scaledHorizontalAxis = scaledDiscRadius * Math.cos(tilt_angle);
+            const scaledVerticalAxis = scaledDiscRadius; 
+
+            context.save();
+            context.translate(iconScreenX, iconScreenY);
+
+            const leftDiskCenterX = -discSeparation / 2;
+            const rightDiskCenterX = discSeparation / 2;
+
+            const drawDiskFill = (centerX, horizontalAxis, verticalAxis) => { // Added parameters
+                context.save();
+                context.beginPath();
+                context.ellipse(centerX, 0, horizontalAxis, verticalAxis, 0, 0, Math.PI * 2); // Use parameters
+                context.fillStyle = 'black';
+                context.fill();
+                context.restore();
+            };
+
+            const drawDiskStroke = (centerX, color, horizontalAxis, verticalAxis) => { // Added parameters
+                context.save();
+                context.beginPath();
+                context.ellipse(centerX, 0, horizontalAxis, verticalAxis, 0, 0, Math.PI * 2); // Use parameters
+                context.strokeStyle = color;
+                context.lineWidth = 1;
+                context.stroke();
+                context.restore();
+            };
+
+            const distanceToLeftDisk = Math.abs(vanishingPointX - (iconScreenX + leftDiskCenterX));
+            const distanceToRightDisk = Math.abs(vanishingPointX - (iconScreenX + rightDiskCenterX));
+
+            const EQUAL_DISTANCE_THRESHOLD = 0.5;
+            const lineCenterX = (leftDiskCenterX + rightDiskCenterX) / 2;
+            const lineCenterY = 0;
+            const circleRadius = scaledDiscRadius * (1/3); 
+
+            if (Math.abs(distanceToLeftDisk - distanceToRightDisk) < EQUAL_DISTANCE_THRESHOLD) {
+                drawDiskFill(leftDiskCenterX, scaledHorizontalAxis, scaledVerticalAxis); // Pass arguments
+                drawDiskFill(rightDiskCenterX, scaledHorizontalAxis, scaledVerticalAxis); // Pass arguments
+                
+                // Line - all green
+                context.beginPath();
+                context.moveTo(leftDiskCenterX, 0);
+                context.lineTo(rightDiskCenterX, 0);
+                context.strokeStyle = 'lime'; // All green
+                context.lineWidth = 1;
+                context.stroke();
+
+                context.beginPath();
+                context.arc(lineCenterX, lineCenterY, circleRadius, 0, Math.PI * 2);
+                context.fillStyle = 'black';
+                context.fill();
+                context.strokeStyle = 'lime';
+                context.lineWidth = 1;
+                context.stroke();
+
+                drawDiskStroke(leftDiskCenterX, 'lime', scaledHorizontalAxis, scaledVerticalAxis); // Pass arguments
+                drawDiskStroke(rightDiskCenterX, 'lime', scaledHorizontalAxis, scaledVerticalAxis); // Pass arguments
+            } else {
+                let furtherDiskX, closerDiskX;
+                if (distanceToLeftDisk < distanceToRightDisk) {
+                    furtherDiskX = rightDiskCenterX;
+                    closerDiskX = leftDiskCenterX;
+                } else {
+                    furtherDiskX = leftDiskCenterX;
+                    closerDiskX = rightDiskCenterX;
+                }
+
+                drawDiskFill(furtherDiskX, scaledHorizontalAxis, scaledVerticalAxis); // Pass arguments
+                drawDiskStroke(furtherDiskX, 'lime', scaledHorizontalAxis, scaledVerticalAxis); // Pass arguments
+
+                // Line - all green
+                context.beginPath();
+                context.moveTo(leftDiskCenterX, 0);
+                context.lineTo(rightDiskCenterX, 0);
+                context.strokeStyle = 'lime'; // All green
+                context.lineWidth = 1;
+                context.stroke();
+                
+                context.beginPath();
+                context.arc(lineCenterX, lineCenterY, circleRadius, 0, Math.PI * 2);
+                context.fillStyle = 'black';
+                context.fill();
+                context.strokeStyle = 'lime';
+                context.lineWidth = 1;
+                context.stroke();
+
+                drawDiskFill(closerDiskX, scaledHorizontalAxis, scaledVerticalAxis); // Pass arguments
+                drawDiskStroke(closerDiskX, 'lime', scaledHorizontalAxis, scaledVerticalAxis); // Pass arguments
+            }
+
+            context.restore();
+
+            // --- Draw Disk Tracers ---
+            diskTracers = diskTracers.filter(tracer => {
+                tracer.distanceTraveled += DISK_TRACER_TRAVEL_SPEED;
+
+                const currentX = tracer.startX + tracer.dirX * tracer.distanceTraveled;
+                const currentY = tracer.startY + tracer.dirY * tracer.distanceTraveled;
+
+                const tailX = currentX - tracer.dirX * DISK_TRACER_TRAIL_LENGTH;
+                const tailY = currentY - tracer.dirY * DISK_TRACER_TRAIL_LENGTH;
+
+                const distanceToCrosshairFromCurrent = Math.sqrt(
+                    Math.pow(vanishingPointX - currentX, 2) +
+                    Math.pow(vanishingPointY - currentY, 2)
+                );
+
+                if (distanceToCrosshairFromCurrent < DISK_TRACER_FADE_START_DISTANCE) {
+                    tracer.alpha = distanceToCrosshairFromCurrent / DISK_TRACER_FADE_START_DISTANCE;
+                }
+
+                if (tracer.alpha <= 0 || tracer.distanceTraveled > tracer.totalDistanceToCrosshair + DISK_TRACER_TRAIL_LENGTH) {
+                    return false; 
+                }
+
+                context.beginPath();
+                context.moveTo(tailX, tailY);
+                context.lineTo(currentX, currentY);
+                context.strokeStyle = `rgba(0, 255, 255, ${tracer.alpha})`;
+                context.lineWidth = 2;
+                context.stroke();
+
+                return true;
+            });
+
+            // Draw the crosshair at its current independent position on the 2D canvas.
+            const crosshairSize = 10;
+            context.strokeStyle = 'lime';
+            context.lineWidth = 1;
+
+            context.beginPath();
+            context.moveTo(vanishingPointX - crosshairSize, vanishingPointY);
+            context.lineTo(vanishingPointX + crosshairSize, vanishingPointY);
+            context.stroke();
+
+            context.beginPath();
+            context.moveTo(vanishingPointX, vanishingPointY - crosshairSize);
+            context.lineTo(vanishingPointX, vanishingPointY + crosshairSize);
+            context.stroke();
+
+            requestAnimationFrame(animate);
+        }
+
+        window.onload = function () {
+            setCanvasDimensions();
+            animate();
+        };
+
+        window.addEventListener('resize', setCanvasDimensions);
+    </script>
+</body>
+</html>
