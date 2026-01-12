@@ -54,7 +54,7 @@ systemctl enable pm2-frothbeast
 
 //////// get a ddns updater
 /// got ddns-updater by qmcgaw on docker and pull the image his github explains it all
-cd/
+cd /
 curl -fsSL https://get.docker.com/ | sh
 sudo usermod -aG docker frothbeast
 sudo docker run hello-world
@@ -79,13 +79,15 @@ sudo nano config.json
     }
   ]
 }
+////^paste this into config.json
 
+
+///////
 crontab -e
-//// paste this into the end of the file and cntl-s to save cntl-x to exit///
 
 PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin
 2,7,12,17,22,27,32,37,42,47,52,57 * * * * sleep 49 ; curl -s http://sync.afraid.org/u/HJSsp4Hd7FPKHzL2RuSnCu2p/ >> /tmp/freedns_frothbeast_nard_ca.log 2>/dev/null
-
+//// ^ paste this into the end of the file and cntl-s to save cntl-x to exit///
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////      NEW CODE TO TRY TO GET ACCESS   /////////////////////////////////////////////////////////////////
@@ -129,6 +131,8 @@ INSERT INTO data VALUES (2, 'two');
 INSERT INTO data VALUES (3, 'three');
 INSERT INTO data VALUES (4, 'four');
 INSERT INTO data VALUES (5, 'five');
+
+
 
 ////// no ;onger using nordvpn for server
 /sh <(curl -sSf https://downloads.nordcdn.com/apps/linux/install.sh)
