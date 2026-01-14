@@ -48,6 +48,11 @@ sudo npm run build
 ///////  if the install hangs, reboot then: npm cache clean --force && npm i ///////////////
 /npm start
 
+///// install tailscale //////////
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
+
+
 ////// set up server to start on boot /////
 /sudo apt install xsel
 /sudo npm install serve -g
