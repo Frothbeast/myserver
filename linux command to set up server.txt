@@ -1,8 +1,20 @@
 /////use USB stick to install ubuntu DO NOT USE GIT SSH KEY UNLESS YOU LIKE FAILING
-/////find IP of machine I used static ip 192.168.50.26
+/////find IP of machine I used static ip 192.168.50.26 you can change this in the first file in /etc/netplan
+/////
 /////log in with laptop from local LAN without nordvpn
 sudo apt update
 sudo apt upgrade
+
+///// install python /////
+cd /opt/frothbeast/
+sudo apt install python3-mysql.connector
+sudo apt install python3.12-venv
+sudo python3 -m venv venv
+source venv/bin/activate
+sudo chown -R $USER:$USER /opt/frothbeast
+pip install mysql-connector-python
+python3 main.py
+
 
 /////// install react ///////
 sudo apt install npm
@@ -103,6 +115,8 @@ sudo firewall-cmd --zone=public --add-port=8080/tcp --permanent
 sudo firewall-cmd --zone=public --add-port=8888/tcp --permanent
 sudo firewall-cmd --zone=public --add-port=22/tcp --permanent
 sudo firewall-cmd --zone=public --add-port=443/tcp --permanent
+sudo firewall-cmd --permanent --add-port=3306/tcp
+sudo firewall-cmd --permanent --add-port=1883/tcp
 sudo firewall-cmd --reload
 
 //// open etc/apache2/httpd.conf (maybe ports.conf)
@@ -122,14 +136,52 @@ sudo firewall-cmd --reload
 /////// create a database ////////
 cd /
 sudo apt install mysql-server
+sudo nano /etc/mysql/mysql.conf.d/mysqld.cnf
+// find bind-address and change it to 0.0.0.0
 sudo systemctl start mysql
 sudo mysql -u root -p
+
 CREATE DATABASE IF NOT EXISTS frothbeast;
-use frothbeast;
-CREATE TABLE data (
-    ID INT AUTO_INCREMENT PRIMARY KEY,
-    word TEXT
-);
+CREATE USER 'frothbeast'@'localhost' IDENTIFIED BY 'DBMyn3wl1f3!26';
+GRANT ALL PRIVILEGES ON frothbeast.* TO 'frothbeast'@'localhost';
+FLUSH PRIVILEGES;
+USE frothbeast;
+CREATE TABLE data (ID INT AUTO_INCREMENT PRIMARY KEY, word TEXT);
+
+
+
+sudo nano /etc/systemd/system/frothbeast.service
+
+/// paste this into the file /////////////////////////////////////////////////////////////////////
+
+[Unit]
+Description=Frothbeast TCP to MySQL Bridge
+# Ensures the service starts only after the network and database are ready
+After=network.target mysql.service
+
+[Service]
+# The command to execute the script
+ExecStart=/usr/bin/python3 /opt/frothbeast/main.py
+# The directory where the script is located
+WorkingDirectory=/opt/frothbeast
+# Automatically restart the service if it fails
+Restart=always
+# Time to wait before restarting
+RestartSec=5
+# The Linux user and group to run the service
+User=frothbeast
+Group=frothbeast
+
+[Install]
+# Defines the boot target for enabling the service
+WantedBy=multi-user.target
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+sudo systemctl daemon-reload
+sudo systemctl enable frothbeast.service
+sudo systemctl start frothbeast.service
+sudo systemctl status frothbeast.service
+///////To see the real-time output (print statements) from your script, use journalctl: sudo journalctl -u frothbeast.service -f
 
 
 
