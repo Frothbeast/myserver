@@ -36,8 +36,17 @@ git config --global user.name "frothbeast"
 git config --global user.email "frothbeast@gmail.com"
 sudo git clone https://github.com/Frothbeast/myserver.git
 
-//////// create a simlink   //////////////
-sudo ln -s /var/www/html/myserver/build/index.html index.html
+//////// point apache to my build folder   //////////////
+sudo nano /etc/apache2/sites-available/000-default.conf
+// change this
+DocumentRoot /var/www/html/myserver/build
+//add this under it
+<Directory /var/www/html/myserver/build>
+    Options Indexes FollowSymLinks
+    AllowOverride All
+    Require all granted
+</Directory>
+sudo systemctl restart apache2
 
 /////// install react dependencies /////////
 cd /var/www/html/myserver
