@@ -161,7 +161,7 @@ GRANT ALL PRIVILEGES ON frothbeast.* TO 'frothbeast'@'localhost';
 FLUSH PRIVILEGES;
 USE frothbeast;
 CREATE TABLE data (ID INT AUTO_INCREMENT PRIMARY KEY, word TEXT);
-
+CREATE TABLE sumpData (ID INT AUTO_INCREMENT PRIMARY KEY, timeON TEXT, timeOff TEXT, hoursOn TEXT);
 
 
 sudo nano /etc/systemd/system/frothbeast.service
