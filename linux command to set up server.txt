@@ -1,7 +1,7 @@
 /////use USB stick to install ubuntu DO NOT USE GIT SSH KEY UNLESS YOU LIKE FAILING
 /////find IP of machine I used static ip 192.168.50.26 you can change this in the first file in /etc/netplan
 /////
-/////log in with laptop from local LAN without nordvpn
+/////log in with laptop from local LAN 
 sudo apt update
 sudo apt upgrade
 
@@ -14,7 +14,6 @@ source venv/bin/activate
 sudo chown -R $USER:$USER /opt/frothbeast
 pip install mysql-connector-python
 python3 main.py
-
 
 /////// install react ///////
 sudo apt install npm
@@ -61,68 +60,8 @@ sudo npm run build
 curl -fsSL https://tailscale.com/install.sh | sh
 sudo tailscale up
 
-
-////// set up server to start on boot /////
-/sudo apt install xsel
-/sudo npm install serve -g
-/npm run build 
-///////  start server using this terminal port 3000 ////////
-/serve -s -n build &> serverErrors.log &
-
-///////  server this as a service during startup /////////
-sudo npm install --global pm2
- cd build
-pm2 start npm -- start
-pm2 save
-pm2 startup
-sudo env PATH=$PATH:/usr/bin /usr/local/lib/node_modules/pm2/bin/pm2 startup systemd -u frothbeast --hp /home/frothbeast
-systemctl enable pm2-frothbeast
-
-//////// get a ddns updater
-/// got ddns-updater by qmcgaw on docker and pull the image his github explains it all
-cd /
-curl -fsSL https://get.docker.com/ | sh
-sudo usermod -aG docker frothbeast
-sudo docker run hello-world
-cd /usr/local
-sudo wget /usr/local/ "https://go.dev/dl/go1.24.2.linux-amd64.tar.gz"
-sudo tar -C /usr/local -xzf go1.24.2.linux-amd64.tar.gz
-export PATH=$PATH:/usr/local/go/bin
-go install github.com/qdm12/ddns-updater/cmd/ddns-updater@latest
-cd /home/frothbeast/go/bin/
-chmod +x ddns-updater
-mkdir data
-sudo nano config.json
-
-{
-  "settings": [
-    {
-      "provider": "freedns",
-      "domain": "frothbeast.nard.ca",
-      "token": "http://sync.afraid.org/u/HJSsp4Hd7FPKHzL2RuSnCu2p/",
-      "ip_version": "ipv4",
-      "ipv6_suffix": ""
-    }
-  ]
-}
-////^paste this into config.json
-
-
-///////
-crontab -e
-
-PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin
-2,7,12,17,22,27,32,37,42,47,52,57 * * * * sleep 49 ; curl -s http://sync.afraid.org/u/HJSsp4Hd7FPKHzL2RuSnCu2p/ >> /tmp/freedns_frothbeast_nard_ca.log 2>/dev/null
-//// ^ paste this into the end of the file and cntl-s to save cntl-x to exit///
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-///////////      NEW CODE TO TRY TO GET ACCESS   /////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+//////  firewall settings ////////
 sudo ufw status
-
-
-
 sudo apt install firewalld
 sudo firewall-cmd --zone=public --add-port=80/tcp --permanent
 sudo firewall-cmd --zone=public --add-port=8080/tcp --permanent
@@ -132,20 +71,6 @@ sudo firewall-cmd --zone=public --add-port=443/tcp --permanent
 sudo firewall-cmd --permanent --add-port=3306/tcp
 sudo firewall-cmd --permanent --add-port=1883/tcp
 sudo firewall-cmd --reload
-
-//// open etc/apache2/httpd.conf (maybe ports.conf)
-//// Find the Listen directive. This specifies the port(s) Apache listens on.
-//// Listen 0.0.0.0:8080
-//// Listen 0.0.0.0:22
-//// You may also need to modify virtual host configurations in the sites-available
-	 or sites-enabled directories to reflect the new port(s)
-
-///// ip addr add 192.168.50.26/24 dev enp1s0
-
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /////// create a database ////////
 cd /
@@ -198,6 +123,76 @@ sudo systemctl status frothbeast.service
 ///////To see the real-time output (print statements) from your script, use journalctl: sudo journalctl -u frothbeast.service -f
 
 
+
+/////// set up server to start on boot /////
+///////sudo apt install xsel
+///////sudo npm install serve -g
+///////npm run build 
+////////  start server using this terminal port 3000 ////////
+/////serve -s -n build &> serverErrors.log &
+
+///////  server this as a service during startup /////////
+///////sudo npm install --global pm2
+/////// cd build
+///////pm2 start npm -- start
+///////pm2 save
+///////pm2 startup
+///////sudo env PATH=$PATH:/usr/bin /usr/local/lib/node_modules/pm2/bin/pm2 startup systemd -u frothbeast --hp /home/frothbeast
+///////systemctl enable pm2-frothbeast
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////// this is useless if stuck behind GNAT  //////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////// get a ddns updater
+//////// got ddns-updater by qmcgaw on docker and pull the image his github explains it all
+/////cd /
+/////curl -fsSL https://get.docker.com/ | sh
+/////sudo usermod -aG docker frothbeast
+/////sudo docker run hello-world
+/////cd /usr/local
+/////sudo wget /usr/local/ "https://go.dev/dl/go1.24.2.linux-amd64.tar.gz"
+/////sudo tar -C /usr/local -xzf go1.24.2.linux-amd64.tar.gz
+/////export PATH=$PATH:/usr/local/go/bin
+/////go install github.com/qdm12/ddns-updater/cmd/ddns-updater@latest
+/////cd /home/frothbeast/go/bin/
+/////chmod +x ddns-updater
+/////mkdir data
+/////sudo nano config.json
+/////
+/////{
+/////  "settings": [
+/////    {
+/////      "provider": "freedns",
+/////      "domain": "frothbeast.nard.ca",
+/////      "token": "http://sync.afraid.org/u/HJSsp4Hd7FPKHzL2RuSnCu2p/",
+/////      "ip_version": "ipv4",
+/////      "ipv6_suffix": ""
+/////    }
+/////  ]
+/////}
+/////////^paste this into config.json
+///////
+/////crontab -e
+/////
+/////PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin
+/////2,7,12,17,22,27,32,37,42,47,52,57 * * * * sleep 49 ; curl -s http://sync.afraid.org/u/HJSsp4Hd7FPKHzL2RuSnCu2p/ >> /tmp/freedns_frothbeast_nard_ca.log /////2>/dev/null
+///////// ^ paste this into the end of the file and cntl-s to save cntl-x to exit///
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////      NEW CODE TO TRY TO GET ACCESS   /////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+//// open etc/apache2/httpd.conf (maybe ports.conf)
+//// Find the Listen directive. This specifies the port(s) Apache listens on.
+//// Listen 0.0.0.0:8080
+//// Listen 0.0.0.0:22
+//// You may also need to modify virtual host configurations in the sites-available
+	 or sites-enabled directories to reflect the new port(s)
+
+///// ip addr add 192.168.50.26/24 dev enp1s0
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ////// no ;onger using nordvpn for server
 /sh <(curl -sSf https://downloads.nordcdn.com/apps/linux/install.sh)
