@@ -21,7 +21,14 @@ import { useState, useEffect } from 'react';
             setClickCounter(clickCounter + 1);
             
         }
-        
+         const btnSpaceGame = (e) => {
+            // window.location.href = "/pages/starfield";
+            window.location.href = "/pages/starfield.html";
+        }
+          const btnTwoPlayerGame = (e) => {
+            // window.location.href = "/pages/pvp";
+            window.location.href = "/pages/pvp.html";
+        }
         return (
             <div className="App">
                 <h1>FrothServer </h1>
@@ -29,7 +36,8 @@ import { useState, useEffect } from 'react';
                 <h2>Session Time Since last reset {counter}</h2>
                 <h2>Number of clicks of reset {clickCounter}</h2>
                 <button onClick={btnClick} >reset timer</button>
-                <button >another buttonr</button>
+                <button type="button" onClick={btnSpaceGame}> Go to My AI generated HTML Space Game  </button>
+                <button type="button" onClick={btnTwoPlayerGame}> Go to My AI generated HTML Two Player Game  </button>
             </div>
         )
     }
